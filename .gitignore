@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+# Sessão do navegador e cookies nunca devem ir pro git
+.blackboard-mcp/
+state.json
+profile/
+downloads/
+.cds-tools/
+*.db
+.pytest_cache/
+.ruff_cache/
+dist/

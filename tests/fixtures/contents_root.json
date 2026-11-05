@@ -1,0 +1,13 @@
+{
+  "results": [
+    {"id": "_100_1", "title": "Unidade 1", "contentHandler": {"id": "resource/x-bb-folder"}, "hasChildren": true,
+     "modified": "2026-08-01T12:00:00.000Z"},
+    {"id": "_101_1", "title": "Atividade Avaliativa 1", "contentHandler": {"id": "resource/x-bb-asmt-test-link"},
+     "hasChildren": false, "modified": "2026-08-02T12:00:00.000Z"},
+    {"id": "_102_1", "title": "Fórum de dúvidas", "contentHandler": {"id": "resource/x-bb-forumlink"},
+     "hasChildren": false, "modified": "2026-08-02T12:00:00.000Z"},
+    {"id": "_103_1", "title": "Ferramenta externa", "contentHandler": {"id": "resource/x-bb-blti-link"},
+     "hasChildren": false, "modified": "2026-08-02T12:00:00.000Z"}
+  ],
+  "paging": {}
+}

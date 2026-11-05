@@ -1,0 +1,8 @@
+{
+  "results": [
+    {"id": "_110_1", "title": "Material teórico", "contentHandler": {"id": "resource/x-bb-file"},
+     "hasChildren": false, "modified": "2026-08-01T12:00:00.000Z"},
+    {"id": "_111_1", "title": "ultraDocumentBody", "contentHandler": {"id": "resource/x-bb-document"},
+     "hasChildren": false, "modified": "2026-08-01T12:00:00.000Z"}
+  ]
+}
