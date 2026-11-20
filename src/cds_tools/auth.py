@@ -20,6 +20,10 @@ log = logging.getLogger(__name__)
 
 ME_PATH = f"{config.API}/v1/users/me"
 
+# Botão do menu do portal que abre o Blackboard já logado. É uma imagem dentro de um <a> sem href
+# (o clique roda JavaScript), então não é role "link" nem tem texto: acha-se pelo alt da imagem.
+AVA_BUTTON = re.compile(r"ambiente virtual", re.I)
+
 # URL absoluta: o Ultra define <base> apontando para o CDN, então um caminho
 # relativo iria para ultra.content.blackboardcdn.com e voltaria 403.
 FETCH_ME_JS = """async (url) => {
@@ -106,6 +110,8 @@ async def refresh_session(interactive: bool, timeout: float) -> dict | None:
             headless=not interactive,
             channel=config.BROWSER_CHANNEL or None,
             no_viewport=interactive,
+            # Em janela estreita o portal esconde o menu lateral (e o link do Blackboard) atrás de um ícone.
+            args=["--start-maximized"] if interactive else [],
         )
         if interactive:
             _attach_trace(ctx)
@@ -114,10 +120,28 @@ async def refresh_session(interactive: bool, timeout: float) -> dict | None:
             await page.goto(config.LOGIN_URL, wait_until="domcontentloaded")
             deadline = time.monotonic() + timeout
             last_status = None
+            opened_ava = False
+            last_click_error = None
             while time.monotonic() < deadline:
                 if interactive and not ctx.pages:
                     log.warning("janela fechada antes de o login ser detectado")
                     return None
+                # O SSO termina no portal logado (/gfa/...). O Blackboard só abre com sessão pelo botão
+                # "Acesso ao Ambiente Virtual" dele (aba nova, em /ultra/course); a raiz do portal ainda
+                # é a tela de login, então não conta.
+                if not opened_ava and not any(pg.url.startswith(config.BASE_URL) for pg in ctx.pages):
+                    portal = next((pg for pg in ctx.pages if pg.url.startswith(f"{config.PORTAL_URL}/gfa")), None)
+                    if portal is not None:
+                        try:
+                            await portal.get_by_alt_text(AVA_BUTTON).first.click(timeout=3000)
+                            opened_ava = True
+                        except PlaywrightError as e:
+                            # Portal carregando ou botão coberto: tenta de novo na próxima volta.
+                            # Só a primeira linha do erro, para não vazar o "call log" do Playwright.
+                            reason = str(e).splitlines()[0]
+                            if reason != last_click_error:
+                                last_click_error = reason
+                                log.warning("clique em 'Acesso ao Ambiente Virtual' falhou: %s", reason)
                 status, user = await _check_me(ctx)
                 if status != last_status:
                     last_status = status
