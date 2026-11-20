@@ -4,8 +4,13 @@ from pathlib import Path
 BASE_URL = os.environ.get("BB_BASE_URL", "https://bb.cruzeirodosulvirtual.com.br").rstrip("/")
 API = "/learn/api/public"
 
-# Entrada SAML direta (Microsoft Entra), a mesma que o link do portal usa.
-LOGIN_URL = os.environ.get("BB_LOGIN_URL", f"{BASE_URL}/auth-saml/saml/login?apiVersion=1&redirectUrl={BASE_URL}/ultra")
+# O login termina no portal do aluno; de lá o auth.py clica em "Acesso ao Ambiente Virtual".
+PORTAL_URL = os.environ.get("BB_PORTAL_URL", "https://novoportal.cruzeirodosul.edu.br").rstrip("/")
+LOGIN_URL = os.environ.get(
+    "BB_LOGIN_URL", f"https://sso.cruzeirodosul.edu.br/?origin={PORTAL_URL}&empresa=unipe"
+)
+# A entrada SAML direta (f"{BASE_URL}/auth-saml/saml/login?apiVersion=1&redirectUrl={BASE_URL}/ultra")
+# passou a responder 404.
 
 
 def _default_data_dir() -> Path:
