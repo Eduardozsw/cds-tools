@@ -43,7 +43,8 @@ bloco de configuração para outros agentes.
 
 Para atualizar: `uv tool upgrade cds-tools`.
 
-O login usa o Edge instalado. Sem Edge (comum no Linux), rode `cds-tools install-browser` e
+O login usa o Edge instalado por padrão. Para usar outro navegador, defina `BB_BROWSER_CHANNEL`
+(por exemplo `chrome`). Sem Edge nem Chrome (comum no Linux), rode `cds-tools install-browser` e
 defina `BB_BROWSER_CHANNEL=""`.
 
 ## Outros agentes
@@ -118,9 +119,11 @@ macOS/Linux (cron): `0 */2 * * * $HOME/.local/bin/cds-tools watch --once --jsonl
 
 ## Como funciona
 
-1. `login` abre o navegador com um perfil dedicado (`~/.cds-tools/profile`) direto na
-   entrada SAML do Blackboard (`/auth-saml/saml/login`), que autentica pela conta Microsoft
-   institucional.
+1. `login` abre o navegador, maximizado e com um perfil dedicado (`~/.cds-tools/profile`), no
+   SSO da instituição, que autentica pela conta Microsoft. O SSO termina no portal do aluno;
+   de lá o programa clica em "Acesso ao Ambiente Virtual", que abre o Blackboard já logado.
+   O botão é uma imagem sem texto nem `href`, então é localizado pelo `alt`. Se o clique
+   falhar, o motivo aparece no terminal.
 2. Quando `/learn/api/public/v1/users/me` responde 200 (consultado de dentro da aba, com URL
    absoluta, porque o Ultra usa `<base>` apontando pro CDN), os cookies são exportados para
    `~/.cds-tools/state.json`. A navegação do login fica em `~/.cds-tools/login-trace.log`
@@ -132,8 +135,12 @@ macOS/Linux (cron): `0 */2 * * * $HOME/.local/bin/cds-tools watch --once --jsonl
 
 ## Variáveis de ambiente
 
-`BB_BASE_URL`, `BB_DATA_DIR`, `BB_DB`, `BB_DOWNLOAD_DIR`, `BB_STUDY_DIR`, `BB_BROWSER_CHANNEL`,
-`BB_LOGIN_TIMEOUT`.
+`BB_BASE_URL`, `BB_PORTAL_URL`, `BB_LOGIN_URL`, `BB_DATA_DIR`, `BB_DB`, `BB_DOWNLOAD_DIR`,
+`BB_STUDY_DIR`, `BB_BROWSER_CHANNEL`, `BB_LOGIN_TIMEOUT`.
+
+O fluxo de login depende do SSO e do portal da instituição, que não são uma API pública e já
+mudaram sem aviso (a entrada SAML direta deixou de funcionar). Se o login quebrar, abra uma
+issue com o `login-trace.log`; `BB_PORTAL_URL` e `BB_LOGIN_URL` permitem apontar para outro endereço.
 
 ## Desenvolvimento
 
