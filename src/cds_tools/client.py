@@ -22,9 +22,10 @@ HEADERS = {
 }
 
 
-# Únicos caminhos que o cliente acessa: material, avisos, notas e calendário.
-# Tentativas, questões e envios de avaliação ficam de fora; isto é a garantia de somente
-# leitura, não as instruções do agente.
+# Únicos caminhos que o cliente acessa: material, avisos, notas, calendário e a leitura de
+# tentativas que o aluno já iniciou no navegador. O cliente só faz GET, então iniciar, salvar
+# e enviar tentativa (POST/PUT) por ele é impossível; isto é a garantia, não as instruções do
+# agente. O único envio do CDS passa pelo navegador, em submit.py, e exige confirmação.
 _ID = r"[^/]+"
 ALLOWED_PATHS = [
     re.compile(p)
@@ -38,7 +39,10 @@ ALLOWED_PATHS = [
         r"/learn/api/public/v1/calendars/items",
         rf"/learn/api/public/v2/courses/{_ID}/gradebook/columns",
         rf"/learn/api/public/v2/courses/{_ID}/gradebook/users/{_ID}",
-        r"/bbcswebdav/.+",  # arquivos do curso
+        rf"/learn/api/public/v2/courses/{_ID}/gradebook/columns/{_ID}(/attempts)?",
+        # API interna do Ultra: único lugar com o enunciado e os anexos de uma tentativa.
+        rf"/learn/api/v1/courses/{_ID}/gradebook/attempts/{_ID}",
+        r"/bbcswebdav/.+",  # arquivos do curso e anexos de avaliação
     )
 ]
 
