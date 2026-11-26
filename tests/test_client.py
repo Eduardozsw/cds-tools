@@ -19,12 +19,19 @@ ALLOWED = [
     "/learn/api/public/v1/calendars/items",
     "/learn/api/public/v2/courses/_1_1/gradebook/columns",
     "/learn/api/public/v2/courses/_1_1/gradebook/users/_9_1",
+    "/learn/api/public/v2/courses/_1_1/gradebook/columns/_4_1",
+    "/learn/api/public/v2/courses/_1_1/gradebook/columns/_4_1/attempts",
+    "/learn/api/v1/courses/_1_1/gradebook/attempts/_6_1",
+    "/learn/api/v1/courses/_1_1/gradebook/attempts/_6_1?expand=toolAttemptDetail",
     "/bbcswebdav/pid-1-dt-content-rid-2_1/xid-2_1",
+    "/bbcswebdav/pid-7-dt-asiobject-rid-2_1/xid-2_1",
 ]
 
 DENIED = [
-    # Avaliações: tentativas, questões e envios nunca são acessados.
-    "/learn/api/public/v2/courses/_1_1/gradebook/columns/_4_1/attempts",
+    # Avaliações: só a leitura de tentativas já iniciadas; o resto nunca é acessado.
+    "/learn/api/v1/courses/_1_1/gradebook/columns/_4_1/attempts",  # POST aqui inicia tentativa
+    "/learn/api/v1/courses/_1_1/gradebook/attempts/_6_1/submissionResults",
+    "/learn/api/public/v2/courses/_1_1/gradebook/columns/_4_1/attempts/_6_1/files",
     "/learn/api/public/v1/courses/_1_1/gradebook/columns/_4_1/attempts/_6_1",
     "/learn/api/public/v1/courses/_1_1/assessments/_7_1/questions",
     "/learn/api/v1/courses/_1_1/assessments",
@@ -53,7 +60,7 @@ def test_request_refuses_before_network(monkeypatch):
     bb = BlackboardClient()
     monkeypatch.setattr(bb, "_send", no_network)
     with pytest.raises(BlackboardError, match="fora da lista"):
-        asyncio.run(bb.request("/learn/api/public/v2/courses/_1_1/gradebook/columns/_4_1/attempts"))
+        asyncio.run(bb.request("/learn/api/public/v1/courses/_1_1/assessments/_7_1/questions"))
 
 
 def test_get_all_follows_paging():

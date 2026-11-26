@@ -22,16 +22,22 @@ Instalações antigas usam `~/.blackboard-mcp/` no lugar de `~/.cds-tools/`.
 
 - **Sua senha.** O login acontece no navegador, na página da Microsoft da instituição. O
   programa só vê os cookies que o Blackboard devolve depois.
-- **Avaliações.** Questões, tentativas e envios não são lidos nem baixados.
+- **Avaliações.** Tentativas nunca são iniciadas. O enunciado e os anexos só são lidos de uma
+  tentativa que você já abriu no navegador.
 
 ## O que o programa pode fazer na sua conta
 
-Somente **ler** material, avisos, notas e calendário. Isso não depende das instruções dadas
-ao agente de IA: o cliente HTTP só aceita uma lista fixa de endereços da API
-(`ALLOWED_PATHS` em `src/cds_tools/client.py`) e recusa qualquer outro antes de sair para a
-rede. Os testes (`tests/test_client.py`) conferem que endereços de avaliação são recusados.
+Somente **ler** material, avisos, notas, calendário e o enunciado de avaliações que você já
+abriu. Isso não depende das instruções dadas ao agente de IA: o cliente HTTP só faz GET e só
+aceita uma lista fixa de endereços da API (`ALLOWED_PATHS` em `src/cds_tools/client.py`),
+recusando qualquer outro antes de sair para a rede. Os testes (`tests/test_client.py`)
+conferem que os demais endereços de avaliação são recusados.
 
-Ele nunca envia nada: não entrega atividade, não posta em fórum, não altera nada.
+A única exceção é `cds_submit_assessment`, que entrega um arquivo como resposta de uma
+avaliação. Ela não passa pelo cliente HTTP: abre o navegador e faz o que você faria à mão,
+só numa tentativa que você já abriu, e só envia com `confirm=True`. Sem isso, apenas mostra o
+que seria enviado. O envio é irreversível e consome a tentativa. Fora isso, o programa não
+posta em fórum nem altera nada.
 
 ## Cuidado com os cookies
 
@@ -48,4 +54,3 @@ Apague `~/.cds-tools` (ou `~/.blackboard-mcp`). Para remover o programa:
 
 - O `watch` tem intervalo mínimo de 30 minutos; o recomendado é a cada 2 horas.
 - Os endpoints usados não são documentados para alunos e podem mudar sem aviso.
-- A ferramenta é para organização e estudo. Não use para responder avaliações.

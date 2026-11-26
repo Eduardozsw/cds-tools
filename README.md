@@ -2,8 +2,9 @@
 
 > [!IMPORTANT]
 > Projeto pessoal e **não oficial**, sem vínculo com a Unipê, a Cruzeiro do Sul Educacional
-> ou a Blackboard. Somente leitura: nunca abre avaliações nem envia nada. Use com
-> moderação e segundo as regras da sua conta. Veja [Privacidade e segurança](PRIVACIDADE.md).
+> ou a Blackboard. Só lê, com uma exceção: `cds_submit_assessment` envia uma resposta quando
+> você pede e confirma. Nunca inicia avaliações. Use com moderação e segundo as regras da sua
+> conta. Veja [Privacidade e segurança](PRIVACIDADE.md).
 
 CLI e servidor MCP para o Blackboard Ultra da Cruzeiro do Sul / Unipê
 (`bb.cruzeirodosulvirtual.com.br`). Seu agente de IA (Claude Code, Claude Desktop, Cursor,
@@ -74,6 +75,9 @@ Agentes só na web (ChatGPT, claude.ai) não conseguem rodar servidores locais.
 | `cds_list_contents` | Conteúdo da disciplina ou de uma pasta |
 | `cds_get_content` | Texto, anexos e filhos de um item |
 | `cds_download_attachment` | Baixa um anexo para `~/.cds-tools/downloads` |
+| `cds_get_assessment` | Enunciado, anexos e links de uma avaliação que você já abriu no navegador |
+| `cds_download_file` | Baixa um arquivo `/bbcswebdav/` (ex.: anexo de avaliação) para `~/.cds-tools/downloads` |
+| `cds_submit_assessment` | Envia um arquivo como resposta de uma avaliação já aberta (pede `confirm=True`) |
 | `cds_upcoming_deadlines` | Calendário dos próximos N dias |
 | `cds_get_grades` | Notas da disciplina |
 | `cds_list_announcements` | Avisos da disciplina |
@@ -132,6 +136,10 @@ macOS/Linux (cron): `0 */2 * * * $HOME/.local/bin/cds-tools watch --once --jsonl
    nos caminhos de `ALLOWED_PATHS` (`src/cds_tools/client.py`).
 4. Se a sessão expirar, o cliente tenta renová-la em modo headless (o SSO costuma lembrar do
    login). Se não conseguir, pede um novo `login`.
+5. `cds_submit_assessment` não usa a API: abre o navegador com o mesmo perfil, entra na
+   avaliação pelo conteúdo da disciplina, clica em "Continuar tentativa", anexa o arquivo à
+   questão dissertativa e envia, devolvendo o número de confirmação. Sem `confirm=True` só mostra
+   o que seria enviado. Se a página oferecer iniciar uma tentativa nova, para sem clicar.
 
 ## Variáveis de ambiente
 

@@ -1,17 +1,28 @@
+import json
 import re
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from urllib.parse import unquote, urljoin, urlsplit
 
 from mcp.server.mcpserver import MCPServer
 
-from . import auth, config, ics, store, study, tracker
+from . import auth, config, ics, store, study, submit, tracker
 from .client import BlackboardClient, BlackboardError
-from .text import html_to_text, local_time, safe_name
+from .text import html_links, html_to_text, local_time, safe_name
 
 INSTRUCTIONS = f"""\
-Acesso somente leitura ao Blackboard Ultra do aluno. Nunca inicie, abra ou leia questões de avaliações.
+Acesso ao Blackboard Ultra do aluno. Tudo é leitura, exceto `cds_submit_assessment`.
+Nunca inicia tentativas de avaliação.
 
 Para "o que há de novo?" use `cds_whats_new`; para prazos no calendário, `cds_export_ics`.
+
+Avaliações: `cds_get_assessment` traz o enunciado e os anexos de uma avaliação que o aluno já
+abriu no navegador; baixe os anexos com `cds_download_file`. Se não houver tentativa, peça ao
+aluno para abrir a avaliação no Blackboard (o CDS não inicia tentativas).
+
+Envio: só quando o aluno pedir. Chame `cds_submit_assessment` sem `confirm`, mostre ao aluno o
+que seria enviado e só chame de novo com `confirm=True` depois que ele confirmar. O envio é
+irreversível e consome a tentativa.
 
 Pasta de estudos ({config.STUDY_DIR}): <período>/<matéria>/materiais e <período>/<matéria>/resumos.
 - `cds_sync_materials` baixa o material das disciplinas para essa pasta (rode antes de resumir).
@@ -33,6 +44,8 @@ def tool(fn):
 
 V1 = f"{config.API}/v1"
 V2 = f"{config.API}/v2"
+# API interna do Ultra (não documentada): só ela devolve o conteúdo de uma tentativa.
+ULTRA = "/learn/api/v1"
 
 
 def course_url(course_id: str) -> str:
@@ -139,6 +152,142 @@ async def download_attachment(course_id: str, content_id: str, attachment_id: st
     meta = await bb.get_json(base)
     dest = await bb.download(f"{base}/download", config.DOWNLOAD_DIR / course_id, meta.get("fileName") or attachment_id)
     return {"path": str(dest), "mimeType": meta.get("mimeType"), "bytes": dest.stat().st_size}
+
+
+def _question(qa: dict) -> dict:
+    q = qa.get("question") or {}
+    raw = (q.get("questionText") or {}).get("rawText")
+    files, links = [], []
+    for link in html_links(raw):
+        url = urljoin(config.BASE_URL + "/", link["url"])
+        if study._is_bb_file(url):
+            try:
+                meta = json.loads(link["bbfile"] or "{}")
+            except ValueError:
+                meta = {}
+            files.append(
+                {
+                    "name": meta.get("linkName") or link["text"],
+                    "mimeType": meta.get("mimeType"),
+                    "bytes": meta.get("fileSize"),
+                    "url": url,
+                }
+            )
+        else:
+            links.append({"text": link["text"], "url": url})
+    return {
+        "position": q.get("position"),
+        "type": q.get("questionType"),
+        "points": q.get("points"),
+        "text": html_to_text(raw),
+        "files": files,
+        "links": links,
+    }
+
+
+@tool
+async def get_assessment(course_id: str, content_id: str) -> dict:
+    """Enunciado e anexos de uma avaliação (prova, tarefa, caso) que o aluno já abriu no navegador.
+
+    Lê a tentativa mais recente do aluno e devolve o texto de cada questão, os arquivos anexados
+    (baixe com cds_download_file) e links externos. Nunca inicia, salva nem envia tentativa:
+    sem tentativa, devolve só prazo e pontos e pede para o aluno abrir a avaliação no Blackboard.
+    """
+    c = await bb.get_json(f"{V1}/courses/{course_id}/contents/{content_id}")
+    handler = c.get("contentHandler") or {}
+    column_id = handler.get("gradeColumnId")
+    if not column_id:
+        raise BlackboardError(f"{content_id} não é uma avaliação (sem coluna de nota)")
+    col = await bb.get_json(f"{V2}/courses/{course_id}/gradebook/columns/{column_id}")
+    grading = col.get("grading") or {}
+    result = {
+        "id": c["id"],
+        "title": c.get("title"),
+        "type": handler.get("id"),
+        "possible": (col.get("score") or {}).get("possible"),
+        "due": local_time(grading.get("due")),
+        "attempts_allowed": grading.get("attemptsAllowed"),
+    }
+    attempts = await bb.get_all(f"{V2}/courses/{course_id}/gradebook/columns/{column_id}/attempts")
+    if not attempts:
+        return result | {
+            "attempt": None,
+            "message": "Nenhuma tentativa iniciada. O CDS não inicia tentativas: abra a avaliação "
+            "no Blackboard e chame esta tool de novo.",
+        }
+    attempt = max(attempts, key=lambda a: a.get("created") or "")
+    detail = await bb.get_json(
+        f"{ULTRA}/courses/{course_id}/gradebook/attempts/{attempt['id']}", {"expand": "toolAttemptDetail"}
+    )
+    tool_detail = (detail.get("toolAttemptDetail") or {}).get("resource/x-bb-assessment")
+    if not isinstance(tool_detail, dict) or not isinstance(tool_detail.get("questionAttempts"), list):
+        # Formato desconhecido vira erro, nunca uma avaliação sem questões.
+        raise BlackboardError(f"tentativa {attempt['id']} sem 'questionAttempts': {str(detail)[:200]}")
+    questions = sorted(tool_detail["questionAttempts"], key=lambda qa: (qa.get("question") or {}).get("position") or 0)
+    return result | {
+        "attempt": {
+            "id": attempt["id"],
+            "status": attempt.get("status"),
+            "created": local_time(attempt.get("created")),
+        },
+        "questions": [_question(qa) for qa in questions],
+    }
+
+
+@tool
+async def download_file(course_id: str, url: str, file_name: str | None = None) -> dict:
+    """Baixa um arquivo do Blackboard (/bbcswebdav/...), como os anexos de cds_get_assessment.
+
+    `url` é o campo `url` de um arquivo; `file_name` é o nome a gravar (padrão: o da URL).
+    Grava em DOWNLOAD_DIR/<course_id> e retorna o caminho local.
+    """
+    full = urljoin(config.BASE_URL + "/", url)
+    if not study._is_bb_file(full):
+        raise BlackboardError(f"não é um arquivo do Blackboard (/bbcswebdav/): {url}")
+    path = urlsplit(full).path
+    name = file_name or unquote(PurePosixPath(path).name)
+    dest = await bb.download(path, config.DOWNLOAD_DIR / course_id, name)
+    return {"path": str(dest), "bytes": dest.stat().st_size}
+
+
+@tool
+async def submit_assessment(course_id: str, content_id: str, file_path: str, confirm: bool = False) -> dict:
+    """Envia um arquivo como resposta de uma avaliação com uma única questão dissertativa.
+
+    Sem `confirm`, só confere tentativa, questão e arquivo e devolve o que seria enviado.
+    Com `confirm=True`, abre o navegador, anexa o arquivo à questão e envia: é irreversível e
+    consome a tentativa. Só use confirm=True depois que o aluno confirmar o envio.
+    Exige uma tentativa em andamento aberta pelo aluno; o CDS nunca inicia tentativas.
+    """
+    info = await get_assessment(course_id, content_id)
+    attempt = info.get("attempt")
+    if attempt is None:
+        raise BlackboardError("nenhuma tentativa iniciada; o aluno precisa abrir a avaliação no Blackboard")
+    if attempt["status"] != "InProgress":
+        raise BlackboardError(f"a tentativa {attempt['id']} não está em andamento (status {attempt['status']})")
+    essays = [q for q in info["questions"] if q["type"] == "essay"]
+    if len(essays) != 1:
+        raise BlackboardError(f"a avaliação tem {len(essays)} questões dissertativas; o CDS só envia quando há uma")
+    file = Path(file_path).expanduser().resolve()
+    if not file.is_file():
+        raise BlackboardError(f"arquivo não encontrado: {file}")
+    summary = {
+        "title": info["title"],
+        "due": info["due"],
+        "attempt": attempt["id"],
+        "question": essays[0]["text"],
+        "file": str(file),
+        "bytes": file.stat().st_size,
+    }
+    if not confirm:
+        return summary | {
+            "submitted": False,
+            "message": "Nada foi enviado. Mostre isto ao aluno e, se ele confirmar, chame de novo com confirm=True.",
+        }
+    folders = await submit.content_folders(bb, course_id, content_id)
+    receipt = await submit.submit_file(course_id, folders, info["title"], attempt["id"], file)
+    after = await get_assessment(course_id, content_id)
+    return summary | receipt | {"submitted": True, "status": (after.get("attempt") or {}).get("status")}
 
 
 @tool
